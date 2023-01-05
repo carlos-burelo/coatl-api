@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "hono": "https://deno.land/x/hono@v3.0.0-rc.3/mod.ts",
+    "std:path": "https://deno.land/std@0.170.0/path/mod.ts",
+    "std:server": "https://deno.land/std@0.170.0/http/server.ts",
+    "validasaur": "https://deno.land/x/validasaur@v0.15.0/mod.ts"
+  }
+}
