@@ -1,19 +1,15 @@
-// declare global {
 export interface TimeStamps {
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Unique {
-  id: string;
+  id: string
 }
 
 export interface WithContent {
-  content: string;
-  description: string;
+  content: string
+  description: string
 }
 
-export type Order = "asc" | "desc";
-// }
-
-// export {};
+export type Order = "asc" | "desc"
