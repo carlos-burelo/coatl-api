@@ -1,9 +1,9 @@
-import { isString, required, validate, validateArray, maxLength, minLength, isOptional } from "validasaur"
-import { ProjectI, ProjectInput, ProjectIRules, ProjectInputRules } from "./types.d.ts"
-import { Storage } from "../../shared/storage.ts"
+import { isOptional, isString, maxLength, minLength, required, validate, validateArray } from "validasaur"
 import { Builder } from '../../shared/builder.ts'
+import { Database } from "../../shared/storage.ts"
+import { ProjectI, ProjectInput, ProjectInputRules, ProjectIRules } from "./types.d.ts"
 
-export class Project extends Storage<ProjectI> {
+export class Project extends Database<ProjectI> {
 
   #builder: Builder = new Builder();
 
@@ -70,7 +70,7 @@ export class Project extends Storage<ProjectI> {
       repository: this.#generateRepositoryLink(data.repository),
       ...(data.pkg && { pkg: await this.#generatePackageInfo(data.pkg.name) }),
     }
-    const result = this.create(payload.id, payload)
+    const result = await this.create(payload.id, payload)
     if (result) {
       return payload
     } else {

@@ -1,9 +1,9 @@
-import { Storage } from "../../shared/storage.ts"
+import { isOptional, isString, required, validate, validateArray } from "validasaur"
 import { Builder } from "../../shared/builder.ts"
-import { SnippetI, SnippetInput, SnippetIRules, SnippetInputRules } from "./types.d.ts"
-import { isString, isOptional, required, validate, validateArray } from "validasaur"
+import { Database } from "../../shared/storage.ts"
+import { SnippetI, SnippetInput, SnippetInputRules, SnippetIRules } from "./types.d.ts"
 
-export class Snippet extends Storage<SnippetI> {
+export class Snippet extends Database<SnippetI> {
 
   #builder = new Builder();
 
@@ -15,24 +15,24 @@ export class Snippet extends Storage<SnippetI> {
     const rules: SnippetInputRules = {
       content: [required, isString],
       title: [required, isString],
-      description: [isOptional, isString],
+      description: [isString],
       tags: validateArray(true, [required, isString]),
       language: [required, isString],
-      id: [isOptional, isString],
+      id: [isString],
     }
     return validate(data, rules)
   }
 
   static validateUpdate (data: SnippetInput) {
     const rules: SnippetIRules = {
-      content: [isOptional, isString],
-      title: [isOptional, isString],
-      description: [isOptional, isString],
+      content: [isString],
+      title: [isString],
+      description: [isString],
       tags: validateArray(true, [isString]),
-      language: [isOptional, isString],
-      id: [isOptional, isString],
-      createdAt: [isOptional, isString],
-      updatedAt: [isOptional, isString]
+      language: [isString],
+      id: [isString],
+      createdAt: [isString],
+      updatedAt: [isString]
     }
     return validate(data, rules)
   }
@@ -41,7 +41,9 @@ export class Snippet extends Storage<SnippetI> {
     const payload: SnippetI = {
       ...this.#builder.build(data),
     }
-    this.create(payload.id, payload)
+    const result = this.create(payload.id, payload)
+    if (!result) return null
+    return payload
   }
 
 }

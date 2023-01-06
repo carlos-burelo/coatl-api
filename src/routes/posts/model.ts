@@ -1,9 +1,9 @@
-import { PostI, PostInput, PostIRules, PostInputRules } from "./types.d.ts"
-import { isString, isOptional, required, validate, validateArray } from "validasaur"
-import { Storage } from "../../shared/storage.ts"
+import { isString, required, validate, isOptional, validateArray } from "validasaur"
 import { Builder } from "../../shared/builder.ts"
+import { Database } from "../../shared/storage.ts"
+import { PostI, PostInput, PostInputRules, PostIRules } from "./types.d.ts"
 
-export class Post extends Storage<PostI> {
+export class Post extends Database<PostI> {
 
   #builder = new Builder();
 
@@ -13,7 +13,7 @@ export class Post extends Storage<PostI> {
 
   static validate (data: PostInput) {
     const rules: PostInputRules = {
-      id: [isOptional, isString],
+      id: [isString],
       title: [required, isString],
       content: [required, isString],
       description: [required, isString],
@@ -25,26 +25,28 @@ export class Post extends Storage<PostI> {
   }
   static validateUpdate (data: PostI) {
     const rules: PostIRules = {
-      id: [isOptional, isString],
-      title: [isOptional, isString],
-      content: [isOptional, isString],
-      description: [isOptional, isString],
-      category: [isOptional, isString],
+      id: [isString],
+      title: [isString],
+      content: [isString],
+      description: [isString],
+      category: [isString],
       tags: validateArray(false, [isString]),
-      createdAt: [isOptional],
-      updatedAt: [isOptional],
-      readTime: [isOptional],
-      tableOfContents: [isOptional],
+      createdAt: [isString],
+      updatedAt: [isString],
+      readTime: [isString],
+      tableOfContents: [isOptional]
     }
     return validate(data, rules)
   }
 
-  write (data: PostInput) {
+  async write (data: PostInput): Promise<PostI | null> {
     const payload: PostI = {
       ...this.#builder.build(data),
       tableOfContents: this.#builder.generateTableOfContents(data.content),
     }
 
-    this.create(payload.id, payload)
+    const result = await this.create(payload.id, payload)
+    if (!result) return null
+    return payload
   }
 }

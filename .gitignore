@@ -2,3 +2,4 @@ core
 db
 tests
 deno.lock
+db.json

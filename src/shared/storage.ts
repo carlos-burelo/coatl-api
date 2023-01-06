@@ -1,153 +1,146 @@
 import { resolve } from "std:path"
+import type { Order } from './app.d.ts'
 
-export class Storage<T> {
-  #storagePath: string = resolve(Deno.cwd(), "./db");
+export class Database<T> {
+  #collection: string
+  #DBPath: string = resolve(Deno.cwd(), "./db.json")
+  constructor(collection: string) {
+    this.#collection = collection
+  }
 
-  #exist (path: string, match: "file" | "directory" = "directory"): boolean {
+  static async init<T> (collections: string[]) {
+    const absolutePath = resolve(Deno.cwd(), "./db.json")
     try {
-      return Deno.statSync(path).isDirectory === (match === "directory")
-    } catch {
-      return false
-    }
-  }
-
-  #filePath (collection: string, document: string): string {
-    const relativePath = `./${collection}/${document}.json`
-    return resolve(this.#storagePath, relativePath)
-  }
-  #folderPath (collection: string): string {
-    return resolve(this.#storagePath, `./${collection}`)
-  }
-
-  #writeFile (path: string, data: unknown) {
-    if (this.#exist(path, "file")) return
-    const encoder = new TextEncoder()
-    const raw = encoder.encode(JSON.stringify(data))
-    console.log(raw)
-    Deno.writeFileSync(path, raw)
-  }
-
-  #overwriteFile (path: string, data: unknown) {
-    if (!this.#exist(path, "file")) return
-    const encoder = new TextEncoder()
-    const raw = encoder.encode(JSON.stringify(data))
-    Deno.writeFileSync(path, raw)
-  }
-
-  #writeFolder (path: string) {
-    if (this.#exist(path, "directory")) return
-    Deno.mkdirSync(path)
-  }
-
-  #readAllDocuments (path: string): T[] {
-    const paths = Deno.readDirSync(path)
-    const absolutePaths = []
-    for (const path of paths) {
-      if (path.isFile) {
-        const payload = this.#readDocument(
-          this.#filePath(this.collection, path.name.replace(".json", "")),
-        )
-        absolutePaths.push(payload)
+      await Deno.stat(absolutePath)
+      return
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) {
+        const encoder = new TextEncoder()
+        const collectionMap: Record<string, object> = {}
+        collections.forEach((collection) => {
+          collectionMap[collection] = {}
+        })
+        const raw = encoder.encode(JSON.stringify(collectionMap))
+        await Deno.writeFile(absolutePath, raw)
       }
     }
-    return absolutePaths
   }
 
-  #readDocument (path: string): T {
+  async #exist (document: string): Promise<boolean> {
     const decoder = new TextDecoder("utf-8")
-    const raw = Deno.readFileSync(path)
-    return JSON.parse(decoder.decode(raw))
+    const raw = await Deno.readFile(this.#DBPath)
+    const data = JSON.parse(decoder.decode(raw))
+    return data[this.#collection][document] !== undefined
   }
 
-  constructor(private readonly collection: string) {
-    const collectionPath = this.#folderPath(collection)
-    if (!this.#exist(this.#storagePath)) {
-      this.#writeFolder(this.#storagePath)
+  async #writeFile (data: unknown) {
+    const encoder = new TextEncoder()
+    const raw = encoder.encode(JSON.stringify(data))
+    Deno.writeFile(this.#DBPath, raw)
+  }
+
+  async getAll (): Promise<T[]> {
+    const decoder = new TextDecoder("utf-8")
+    const raw = await Deno.readFile(this.#DBPath)
+    const data = JSON.parse(decoder.decode(raw))
+    console.log({ data, collection: this.#collection })
+    const documents = data[this.#collection]
+    console.log(documents)
+    const result: T[] = []
+    for (const document in documents) {
+      result.push(documents[document])
     }
-    if (!this.#exist(collectionPath)) {
-      this.#writeFolder(collectionPath)
-    }
+    return result
   }
 
-  getAll (): T[] {
-    const collectionPath = this.#folderPath(this.collection)
-    return this.#readAllDocuments(collectionPath)
+  async get (document: string): Promise<T | null> {
+    const decoder = new TextDecoder("utf-8")
+    const raw = await Deno.readFile(this.#DBPath)
+    const data = JSON.parse(decoder.decode(raw))
+    return data[this.#collection][document] || null
   }
 
-  get (document: string): T | null {
-    const documentPath = this.#filePath(this.collection, document)
-    if (this.#exist(documentPath, "file")) {
-      return this.#readDocument(documentPath)
-    } else {
-      return null
-    }
-  }
-
-  create (document: string, data: T) {
-    if (this.#exist(this.#filePath(this.collection, document), "file")) {
+  async create (document: string, data: T) {
+    if (await this.#exist(document)) {
       return false
     }
-    this.#writeFile(this.#filePath(this.collection, document), data)
+    const decoder = new TextDecoder("utf-8")
+    const raw = await Deno.readFile(this.#DBPath)
+    const db = JSON.parse(decoder.decode(raw))
+    db[this.#collection][document] = data
+    await this.#writeFile(db)
     return true
   }
 
-  update (document: string, data: Partial<T>) {
-    const filePath = this.#filePath(this.collection, document)
-    const newDate = new Date().toISOString()
-    if (!this.#exist(filePath, "file")) {
+  async update (document: string, data: Partial<T>): Promise<T | null> {
+    if (!await this.#exist(document)) {
       return null
-    } else {
-      const oldData = this.#readDocument(filePath)
-      const newData = { ...oldData, ...data, updatedAt: newDate }
-      this.#overwriteFile(filePath, newData)
-      return newData
     }
+    const decoder = new TextDecoder("utf-8")
+    const raw = await Deno.readFile(this.#DBPath)
+    const db = JSON.parse(decoder.decode(raw))
+    const newUpdatedAt = new Date().toISOString()
+    const newData = { ...db[this.#collection][document], ...data, updatedAt: newUpdatedAt }
+    db[this.#collection][document] = newData
+    await this.#writeFile(db)
+    return newData
   }
 
-  mutate (document: string, data: T) {
-    const filePath = this.#filePath(this.collection, document)
-    if (!this.#exist(filePath, "file")) {
+  async mutate (document: string, data: T) {
+    if (!await this.#exist(document)) {
       return false
     }
-    this.#writeFile(filePath, data)
+    const decoder = new TextDecoder("utf-8")
+    const raw = await Deno.readFile(this.#DBPath)
+    const db = JSON.parse(decoder.decode(raw))
+    db[this.#collection][document] = data
+    await this.#writeFile(db)
+    return true
   }
 
-  delete (document: string) {
-    const filePath = this.#filePath(this.collection, document)
-    if (!this.#exist(filePath, "file")) {
+  async delete (document: string) {
+    if (!await this.#exist(document)) {
       return false
     }
-    Deno.removeSync(filePath)
+    const decoder = new TextDecoder("utf-8")
+    const raw = await Deno.readFile(this.#DBPath)
+    const db = JSON.parse(decoder.decode(raw))
+    delete db[this.#collection][document]
+    await this.#writeFile(db)
+    return true
   }
 
-  deleteAll () {
-    const collectionPath = this.#folderPath(this.collection)
-    if (!this.#exist(collectionPath, "directory")) {
-      return false
-    }
-    Deno.removeSync(collectionPath, { recursive: true })
+  async deleteAll () {
+    const decoder = new TextDecoder("utf-8")
+    const raw = await Deno.readFile(this.#DBPath)
+    const db = JSON.parse(decoder.decode(raw))
+    db[this.#collection] = {}
+    await this.#writeFile(db)
+    return true
   }
 
   // filtering
-  filterBy (field: keyof T, value: T[keyof T]): T[] {
-    const collection = this.getAll()
+
+  async filterBy (field: keyof T, value: T[keyof T]): Promise<T[]> {
+    const collection = await this.getAll()
     return collection.filter((item) =>
       item[field] === value || (<Array<any>>item[field]).includes(value)
     )
   }
-
-  find (query: string): T[] {
+  // searching
+  async find (query: string): Promise<T[]> {
     const queryString = query.toLowerCase()
-    const collection = this.getAll()
-    return collection.filter((item) => {
+    const collections = await this.getAll()
+    return collections.filter((item) => {
       const itemString = JSON.stringify(item).toLowerCase()
       return itemString.includes(queryString)
     })
   }
 
   // sorting
-  sortBy (field: keyof T, order: "asc" | "desc" = "asc"): T[] {
-    const collection = this.getAll()
+  async sortBy (field: keyof T, order: Order = "asc"): Promise<T[]> {
+    const collection = await this.getAll()
+    console.log(collection)
     return collection.sort((a, b) => {
       if (order === "asc") {
         return a[field] > b[field] ? 1 : -1
@@ -158,23 +151,17 @@ export class Storage<T> {
   }
 
   // pagination
-  paginate (page: number, limit: number): T[] {
-    const collection = this.getAll()
+  async paginate (page: number, limit: number): Promise<T[]> {
+    const collection = await this.getAll()
     const start = (page - 1) * limit
     const end = start + limit
     return collection.slice(start, end)
   }
 
   // count
-  count (): number {
-    const collection = this.getAll()
+  async count (): Promise<number> {
+    const collection = await this.getAll()
     return collection.length
   }
 
-  // distinct
-  distinct (field: keyof T): T[keyof T][] {
-    const collection = this.getAll()
-    const values = collection.map((item) => item[field])
-    return [...new Set(values)]
-  }
 }

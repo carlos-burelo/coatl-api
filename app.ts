@@ -1,4 +1,6 @@
-import { serve } from "std:server";
-import app from "./src/app.ts";
+import { serve } from "std:server"
+import app from "./src/app.ts"
+import { Database } from "./src/shared/storage.ts"
 
-serve(app.fetch);
+await Database.init(['posts', 'projects', 'snippets'])
+serve(app.fetch)
